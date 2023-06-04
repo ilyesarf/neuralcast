@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 # Load the EDF file
 class Load:
-    def __init__(self, path, meta_labels=['T0', 'T1', 'T2']):
-        self.path = path 
+    def __init__(self, path="data/S001/S001R03.edf", meta_labels=['T0', 'T1', 'T2']):
+        self.path = sys.argv[1] if len(sys.argv) > 1 else path
         self.meta_labels = [sys.argv[2]] if len(sys.argv) > 2 else meta_labels
 
         self.data, self.annotations, self.channel_labels, self.sampling_rate = self.read_file(path)
@@ -65,8 +65,8 @@ class Load:
 
 
 class Plot:
-    def __init__(self, path):
-        self.load = Load(path)
+    def __init__(self):
+        self.load = Load()
 
     def display_data(self, i, ax, data):
         segment = data[i]
@@ -76,12 +76,13 @@ class Plot:
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
 
-    def plot(self):
-        filtered_segments = self.load.preprocess_data()
+    def plot(self, segments=None):
+        if not segments:
+            segments = self.load.preprocess_data()
 
         if os.getenv('FILTERED'):
             print("Filtered segments")
-            data = filtered_segments
+            data = segments 
         else:
             print("Unfiltered segments")
             data = self.load.segments
@@ -90,6 +91,7 @@ class Plot:
             n_segs_display = 3  # number of segments to display
             fig, axs = plt.subplots(n_segs_display, 1, figsize=(8, 6))  # Set the figure size
             fig.suptitle("Segments with label: " + label)  # Set the figure title once
+            print(label)
             for i in range(n_segs_display):
                 ax = axs[i] if n_segs_display > 1 else axs  # Access the correct subplot
                 self.display_data(i, ax, data[label])
@@ -97,6 +99,5 @@ class Plot:
             plt.show()
 
 if __name__ == '__main__':
-    path = sys.argv[1]
-    Plot(path).plot()
+    Plot().plot()
 
