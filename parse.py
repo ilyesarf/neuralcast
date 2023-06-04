@@ -5,90 +5,100 @@ from scipy.signal import butter, filtfilt
 import matplotlib.pyplot as plt
 
 # Load the EDF file
-def read_file(path):
-    edf_file = pyedflib.EdfReader(path) #"data/S001/S001R03.edf")
+class Load:
+    def __init__(self, path, meta_labels=['T0', 'T1', 'T2']):
+        self.path = path 
+        self.meta_labels = [sys.argv[2]] if len(sys.argv) > 2 else meta_labels
 
-    num_channels = edf_file.signals_in_file
-    channel_labels = edf_file.getSignalLabels()
-    sampling_rate = edf_file.getSampleFrequency(0)
+        self.data, self.annotations, self.channel_labels, self.sampling_rate = self.read_file(path)
 
-    data = []
-    for i in range(num_channels):
-        channel_data = edf_file.readSignal(i)
-        data.append(channel_data)
+        self.segments, self.labels = self.extract_segments()
+        
+    def read_file(self, path):
+        edf_file = pyedflib.EdfReader(self.path) #"data/S001/S001R03.edf")
 
-    annotations = edf_file.readAnnotations()
+        num_channels = edf_file.signals_in_file
+        channel_labels = edf_file.getSignalLabels()
+        sampling_rate = edf_file.getSampleFrequency(0)
 
-    edf_file.close()
+        data = []
+        for i in range(num_channels):
+            channel_data = edf_file.readSignal(i)
+            data.append(channel_data)
 
-    return data, annotations, channel_labels, sampling_rate
+        annotations = edf_file.readAnnotations()
 
-path = sys.argv[1]
-meta_labels = [sys.argv[2]] if len(sys.argv) > 2 else ['T0', 'T1', 'T2']
-data, annotations, channel_labels, sampling_rate = read_file(path)
+        edf_file.close()
 
-def extract_segments():
-    segments = []
-    labels = []
-
-    for onset, duration, description in zip(annotations[0], annotations[1], annotations[2]):
-        if description in meta_labels:
-            start_index = int(onset * sampling_rate)
-            end_index = int((onset + duration) * sampling_rate)
-            segment_data = np.array(data)[:, start_index:end_index]
-            segments.append(segment_data)
-            labels.append(description)
-
-    return segments, labels
-
-segments, labels = extract_segments()
-
-def preprocess_data():
-    order = 4
-    lowcut = 1.0  # Low cutoff frequency in Hz
-    highcut = 30.0  # High cutoff frequency in Hz
-
-    # Apply bandpass filter to each channel
-    filtered_segments = []
-    for segment in segments:
-        # Create bandpass filter
-        b, a = butter(order, [lowcut, highcut], fs=sampling_rate, btype='band')
-        # Apply filter to segment
-        filtered_segment = filtfilt(b, a, segment)
-        filtered_segments.append(filtered_segment)
-
-    return filtered_segments
-
-filtered_segments = preprocess_data()
-
-def display_data(i, ax, data=segments):
-    segment = data[i]
-    time = np.arange(segment.shape[1]) / sampling_rate
-    for seg_i in range(segment.shape[0]):
-        ax.plot(time, segment[seg_i, :], label=channel_labels[seg_i])
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Amplitude")
+        return data, annotations, channel_labels, sampling_rate
 
 
-def plot():
-    n_segs_display = 3  # number of segments to display
-    fig, axs = plt.subplots(n_segs_display, 1, figsize=(8, 6))  # Set the figure size
+    def extract_segments(self):
+        segments = []
+        labels = []
 
-    if os.getenv('FILTERED'):
-        print("Filtered segments")
-        data = filtered_segments
-    else:
-        print("Unfiltered segments")
-        data = segments
-    
-    fig.suptitle("Segments with label: " + ", ".join(set(labels)))  # Set the figure title once
+        for onset, duration, description in zip(self.annotations[0], self.annotations[1], self.annotations[2]):
+            if description in self.meta_labels:
+                start_index = int(onset * self.sampling_rate)
+                end_index = int((onset + duration) * self.sampling_rate)
+                segment_data = np.array(self.data)[:, start_index:end_index]
+                segments.append(segment_data)
+                labels.append(description)
 
-    for i in range(n_segs_display):
-        ax = axs[i] if n_segs_display > 1 else axs  # Access the correct subplot
-        display_data(i, ax, data)
+        return segments, labels
 
-    plt.tight_layout()
-    plt.show()
+    def preprocess_data(self):
+        order = 4
+        lowcut = 1.0  # Low cutoff frequency in Hz
+        highcut = 30.0  # High cutoff frequency in Hz
 
-plot()
+        # Apply bandpass filter to each channel
+        filtered_segments = []
+        for segment in self.segments:
+            # Create bandpass filter
+            b, a = butter(order, [lowcut, highcut], fs=self.sampling_rate, btype='band')
+            # Apply filter to segment
+            filtered_segment = filtfilt(b, a, segment)
+            filtered_segments.append(filtered_segment)
+
+        return filtered_segments
+
+
+class Plot:
+    def __init__(self, path):
+        self.load = Load(path)
+
+    def display_data(self, i, ax, data):
+        segment = data[i]
+        time = np.arange(segment.shape[1]) / self.load.sampling_rate
+        for seg_i in range(segment.shape[0]):
+            ax.plot(time, segment[seg_i, :], label=self.load.channel_labels[seg_i])
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel("Amplitude")
+
+
+    def plot(self):
+        filtered_segments = self.load.preprocess_data()
+        n_segs_display = 3  # number of segments to display
+        fig, axs = plt.subplots(n_segs_display, 1, figsize=(8, 6))  # Set the figure size
+
+        if os.getenv('FILTERED'):
+            print("Filtered segments")
+            data = filtered_segments
+        else:
+            print("Unfiltered segments")
+            data = self.load.segments
+        
+        fig.suptitle("Segments with label: " + ", ".join(set(self.load.labels)))  # Set the figure title once
+
+        for i in range(n_segs_display):
+            ax = axs[i] if n_segs_display > 1 else axs  # Access the correct subplot
+            self.display_data(i, ax, data)
+
+        plt.tight_layout()
+        plt.show()
+
+if __name__ == '__main__':
+    path = sys.argv[1]
+    Plot(path).plot()
 
