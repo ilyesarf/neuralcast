@@ -12,7 +12,7 @@ class Load:
 
         self.data, self.annotations, self.channel_labels, self.sampling_rate = self.read_file(path)
 
-        self.segments, self.labels = self.extract_segments()
+        self.segments = self.extract_segments()
         
     def read_file(self, path):
         edf_file = pyedflib.EdfReader(self.path) #"data/S001/S001R03.edf")
@@ -34,18 +34,17 @@ class Load:
 
 
     def extract_segments(self):
-        segments = []
-        labels = []
+        segments = {k: [] for k in self.meta_labels}
 
         for onset, duration, description in zip(self.annotations[0], self.annotations[1], self.annotations[2]):
             if description in self.meta_labels:
                 start_index = int(onset * self.sampling_rate)
                 end_index = int((onset + duration) * self.sampling_rate)
                 segment_data = np.array(self.data)[:, start_index:end_index]
-                segments.append(segment_data)
-                labels.append(description)
 
-        return segments, labels
+                segments[description].append(segment_data)
+
+        return segments
 
     def preprocess_data(self):
         order = 4
@@ -53,13 +52,14 @@ class Load:
         highcut = 30.0  # High cutoff frequency in Hz
 
         # Apply bandpass filter to each channel
-        filtered_segments = []
-        for segment in self.segments:
-            # Create bandpass filter
-            b, a = butter(order, [lowcut, highcut], fs=self.sampling_rate, btype='band')
-            # Apply filter to segment
-            filtered_segment = filtfilt(b, a, segment)
-            filtered_segments.append(filtered_segment)
+        filtered_segments = {k: [] for k in self.meta_labels}
+        for label in self.meta_labels:
+            for segment in self.segments[label]:
+                # Create bandpass filter
+                b, a = butter(order, [lowcut, highcut], fs=self.sampling_rate, btype='band')
+                # Apply filter to segment
+                filtered_segment = filtfilt(b, a, segment)
+                filtered_segments[label].append(filtered_segment)
 
         return filtered_segments
 
@@ -76,11 +76,8 @@ class Plot:
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Amplitude")
 
-
     def plot(self):
         filtered_segments = self.load.preprocess_data()
-        n_segs_display = 3  # number of segments to display
-        fig, axs = plt.subplots(n_segs_display, 1, figsize=(8, 6))  # Set the figure size
 
         if os.getenv('FILTERED'):
             print("Filtered segments")
@@ -89,14 +86,15 @@ class Plot:
             print("Unfiltered segments")
             data = self.load.segments
         
-        fig.suptitle("Segments with label: " + ", ".join(set(self.load.labels)))  # Set the figure title once
+        for label in self.load.meta_labels:
+            n_segs_display = 3  # number of segments to display
+            fig, axs = plt.subplots(n_segs_display, 1, figsize=(8, 6))  # Set the figure size
+            fig.suptitle("Segments with label: " + label)  # Set the figure title once
+            for i in range(n_segs_display):
+                ax = axs[i] if n_segs_display > 1 else axs  # Access the correct subplot
+                self.display_data(i, ax, data[label])
 
-        for i in range(n_segs_display):
-            ax = axs[i] if n_segs_display > 1 else axs  # Access the correct subplot
-            self.display_data(i, ax, data)
-
-        plt.tight_layout()
-        plt.show()
+            plt.show()
 
 if __name__ == '__main__':
     path = sys.argv[1]
