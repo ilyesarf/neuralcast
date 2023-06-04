@@ -23,9 +23,7 @@ def read_file(path):
     return data, annotations, channel_labels, sampling_rate
 
 path = sys.argv[1]
-print(path)
 meta_labels = [sys.argv[2]] if len(sys.argv) > 2 else ['T0', 'T1', 'T2']
-print(meta_labels)
 data, annotations, channel_labels, sampling_rate = read_file(path)
 
 def extract_segments():
@@ -43,14 +41,13 @@ def extract_segments():
     return segments, labels
 
 segments, labels = extract_segments()
-def display_data(i):
+def display_data(i, ax):
     segment = segments[i]
     time = np.arange(segment.shape[1]) / sampling_rate
     for seg_i in range(segment.shape[0]):
-        axs[i].plot(time, segment[seg_i, :], label=channel_labels[seg_i])
-    axs[i].set_xlabel("Time (s)")
-    axs[i].set_ylabel("Amplitude")
-    #axs[i].legend()
+        ax.plot(time, segment[seg_i, :], label=channel_labels[seg_i])
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
 
 n_segs_display = 2 #number of segments to display
 fig, axs = plt.subplots(n_segs_display, 1)
@@ -58,7 +55,8 @@ fig.subplots_adjust(bottom=0.1)
 
 for i, label in zip(range(n_segs_display), labels):
     fig.suptitle(f"Segments with label: {label}")
-    display_data(i)
+    ax = axs[i] if n_segs_display > 1 else axs
+    display_data(i, ax)
 
 plt.tight_layout()
 plt.show()
