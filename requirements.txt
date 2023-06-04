@@ -1,1 +1,2 @@
 pyedflib
+scipy

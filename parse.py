@@ -1,6 +1,7 @@
-import sys
+import os, sys
 import pyedflib
 import numpy as np
+from scipy.signal import butter, filtfilt
 import matplotlib.pyplot as plt
 
 # Load the EDF file
@@ -41,22 +42,53 @@ def extract_segments():
     return segments, labels
 
 segments, labels = extract_segments()
-def display_data(i, ax):
-    segment = segments[i]
+
+def preprocess_data():
+    order = 4
+    lowcut = 1.0  # Low cutoff frequency in Hz
+    highcut = 30.0  # High cutoff frequency in Hz
+
+    # Apply bandpass filter to each channel
+    filtered_segments = []
+    for segment in segments:
+        # Create bandpass filter
+        b, a = butter(order, [lowcut, highcut], fs=sampling_rate, btype='band')
+        # Apply filter to segment
+        filtered_segment = filtfilt(b, a, segment)
+        filtered_segments.append(filtered_segment)
+
+    return filtered_segments
+
+filtered_segments = preprocess_data()
+
+def display_data(i, ax, data=segments):
+    segment = data[i]
     time = np.arange(segment.shape[1]) / sampling_rate
     for seg_i in range(segment.shape[0]):
         ax.plot(time, segment[seg_i, :], label=channel_labels[seg_i])
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Amplitude")
 
-n_segs_display = 2 #number of segments to display
-fig, axs = plt.subplots(n_segs_display, 1)
-fig.subplots_adjust(bottom=0.1)
 
-for i, label in zip(range(n_segs_display), labels):
-    fig.suptitle(f"Segments with label: {label}")
-    ax = axs[i] if n_segs_display > 1 else axs
-    display_data(i, ax)
+def plot():
+    n_segs_display = 3  # number of segments to display
+    fig, axs = plt.subplots(n_segs_display, 1, figsize=(8, 6))  # Set the figure size
 
-plt.tight_layout()
-plt.show()
+    if os.getenv('FILTERED'):
+        print("Filtered segments")
+        data = filtered_segments
+    else:
+        print("Unfiltered segments")
+        data = segments
+    
+    fig.suptitle("Segments with label: " + ", ".join(set(labels)))  # Set the figure title once
+
+    for i in range(n_segs_display):
+        ax = axs[i] if n_segs_display > 1 else axs  # Access the correct subplot
+        display_data(i, ax, data)
+
+    plt.tight_layout()
+    plt.show()
+
+plot()
+
