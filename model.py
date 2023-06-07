@@ -10,40 +10,45 @@ features = data.iloc[:, :-1].values
 labels = data.iloc[:, -1].values
 
 # Step 2: Data Preprocessing
-features = np.reshape(features, (features.shape[0], 1, features.shape[1]))
+features = np.reshape(features, (features.shape[0], 1, 1, features.shape[1]))
 features = torch.tensor(features, dtype=torch.float32)
 labels = torch.tensor(labels, dtype=torch.long)
 
 train_features, test_features, train_labels, test_labels = train_test_split(features, labels, test_size=0.2, random_state=42)
 
-class CNN(nn.Module):
-    def __init__(self) -> None:
-        super(CNN, self).__init__()
-        self.conv1 = nn.Conv1d(1, 16, kernel_size=3)
-        self.relu = nn.ReLU()
-        self.pool = nn.MaxPool1d(kernel_size=2)
-        self.flatten = nn.Flatten()
-        self.l1 = nn.Linear(16 * ((features.shape[-1] - 2)//2), 64)
-        self.l2 = nn.Linear(64, 2)
+class EEGNet(nn.Module):
+    def __init__(self):
+        super(EEGNet, self).__init__()
+        self.firstconv = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=(1, 51), stride=(1, 1), padding=(0, 25), bias=False),
+            nn.BatchNorm2d(16, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+        )
+        self.separableConv = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=(1, 15), stride=(1, 1), padding=(0, 7), bias=False),
+            nn.BatchNorm2d(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+            nn.ELU(alpha=1.0),
+            nn.AvgPool2d(kernel_size=(1, 8), stride=(1, 8), padding=0),
+            nn.Dropout(p=0.25),
+        )
+        self.classify = nn.Sequential(
+            nn.Linear(in_features=32, out_features=2, bias=True),
+        )
 
     def forward(self, x):
-        x= self.conv1(x)
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.flatten(x)
-        x = self.l1(x)
-        x = self.relu(x)
-        x = self.l2(x)
+        x = self.firstconv(x)
+        x = self.separableConv(x)
+        x = x.view(x.size(0), -1)  # Flatten the tensor
+        x = self.classify(x)
         return x
     
 if __name__ == '__main__':
-    model = CNN()
+    model = EEGNet()
 
     # Step 5: Model Compilation and Training
     lossfunc = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     epochs = 100
-    batch = 50
+    batch = 32
 
     for epoch in range(epochs):
         model.train()
